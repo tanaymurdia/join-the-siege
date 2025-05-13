@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  file-classifier:
+    build:
+      context: ..
+      dockerfile: model/Dockerfile
+    volumes:
+      - ../files:/app/files
+      - ../model/saved_models:/app/model/saved_models
+    environment:
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "5000:5000"
+    tty: true
+    stdin_open: true 
