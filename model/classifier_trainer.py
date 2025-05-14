@@ -239,18 +239,6 @@ class DocumentFeatureExtractor:
         except Exception as e:
             print(f"Error generating BERT embeddings: {e}")
             return np.zeros(768)
-    
-    def filename_features(self, filename):
-        filename = str(filename).lower()
-        name, ext = os.path.splitext(filename)
-        name = name.replace("_", " ").replace("-", " ")
-        
-        features = {
-            "filename_length": len(filename),
-            "extension": ext[1:] if ext else "",
-            "filename_words": name
-        }
-        return features
 
 class AdvancedFileClassifier:
     def __init__(self, model_dir='model/saved_models'):
@@ -264,7 +252,6 @@ class AdvancedFileClassifier:
     def _process_file(self, row):
         try:
             file_features = {}
-            file_features.update(self.feature_extractor.filename_features(row['filename']))
             
             if 'path' in row and os.path.exists(row['path']):
                 content = self.feature_extractor.extract_text_from_file(row['path'])
@@ -282,10 +269,11 @@ class AdvancedFileClassifier:
             return file_features
         except Exception as e:
             print(f"Error processing file {row.get('filename', 'unknown')}: {e}")
-            basic_features = self.feature_extractor.filename_features(row.get('filename', ''))
+            # Return empty embeddings if there's an error
+            empty_features = {}
             for i in range(768):
-                basic_features[f'content_emb_{i}'] = 0
-            return basic_features
+                empty_features[f'content_emb_{i}'] = 0
+            return empty_features
     
     def _extract_features(self, data):
         features = []
@@ -306,18 +294,11 @@ class AdvancedFileClassifier:
         return pd.DataFrame(features)
     
     def build_model(self):
-        filename_words_pipeline = Pipeline([
-            ('tfidf', TfidfVectorizer(min_df=2, max_df=0.8, ngram_range=(1, 2)))
-        ])
-        
         content_pipeline = Pipeline([
             ('passthrough', FunctionTransformer())
         ])
         
         feature_engineering = ColumnTransformer([
-            ('filename_length', FunctionTransformer(), ['filename_length']),
-            ('extension', OneHotEncoder(handle_unknown='ignore'), ['extension']),
-            ('filename_words', filename_words_pipeline, 'filename_words'),
             ('content_embeddings', content_pipeline, [f'content_emb_{i}' for i in range(768)])
         ])
         
@@ -422,14 +403,6 @@ class AdvancedFileClassifier:
             return prediction
         except Exception as e:
             print(f"Error during prediction: {e}")
-            
-            if filename:
-                filename = filename.lower()
-                for doc_type in ["drivers_license", "bank_statement", "invoice", "tax_return", "medical_record", "insurance_claim"]:
-                    if doc_type.replace("_", "") in filename.replace("_", "").replace(" ", ""):
-                        print(f"Fallback classification based on filename: {doc_type}")
-                        return doc_type
-            
             return "unknown_file"
 
 if __name__ == "__main__":

@@ -108,78 +108,6 @@ class DockerManager:
         else:
             print("Classification failed.")
             return False
-            
-    def run_benchmark(self, data_dir, num_files=5):
-        if not os.path.exists(data_dir):
-            print(f"Error: Directory {data_dir} does not exist")
-            return False
-            
-        data_dir = os.path.abspath(data_dir)
-        
-        print(f"Running benchmark on files in {data_dir}")
-        print("This will test OCR-selective processing on various file types")
-        
-        all_files = []
-        for ext in ['.pdf', '.jpg', '.png', '.docx', '.txt']:
-            files = list(Path(data_dir).glob(f"**/*{ext}"))
-            if files:
-                selected = random.sample(files, min(len(files), num_files))
-                all_files.extend(selected)
-        
-        if not all_files:
-            print(f"No suitable files found in {data_dir}")
-            return False
-            
-        print(f"Testing classification on {len(all_files)} files...")
-        
-        cmd = [
-            "docker-compose",
-            "-f", str(self.docker_compose_file),
-            "run",
-            "--rm",
-            "-v", f"{data_dir}:/app/benchmark_files",
-            self.container_name,
-            "-c", (
-                f"from model.classifier_trainer import AdvancedFileClassifier; "
-                f"import os; import time; "
-                f"classifier = AdvancedFileClassifier(); "
-                f"results = {{'pdf': [], 'image': [], 'docx': [], 'txt': []}}; "
-                f"test_files = {[str(f.relative_to(data_dir)) for f in all_files]}; "
-                f"for file in test_files: "
-                f"    start = time.time(); "
-                f"    ext = os.path.splitext(file)[1].lower(); "
-                f"    needs_ocr = 'No'; "
-                f"    if ext in ['.jpg', '.jpeg', '.png']: "
-                f"        file_type = 'image'; "
-                f"        needs_ocr = 'Yes'; "
-                f"    elif ext == '.pdf': "
-                f"        file_type = 'pdf'; "
-                f"        if classifier.feature_extractor.needs_ocr('/app/benchmark_files/' + file): "
-                f"            needs_ocr = 'Yes'; "
-                f"    elif ext == '.docx': "
-                f"        file_type = 'docx'; "
-                f"    else: "
-                f"        file_type = 'txt'; "
-                f"    prediction = classifier.predict(file_path='/app/benchmark_files/' + file); "
-                f"    duration = time.time() - start; "
-                f"    results[file_type].append((file, prediction, duration, needs_ocr)); "
-                f"    print(f'{{file}} ({{}}) - {{prediction}} in {{duration:.2f}}s (OCR: {{needs_ocr}})'); "
-                f"print('\\nBenchmark Summary:'); "
-                f"for file_type, type_results in results.items(): "
-                f"    if type_results: "
-                f"        avg_time = sum(r[2] for r in type_results) / len(type_results); "
-                f"        print(f'{{file_type.upper()}}: Avg processing time: {{avg_time:.2f}}s for {{len(type_results)}} files'); "
-            )
-        ]
-        
-        result = subprocess.run(cmd, cwd=str(self.root_dir))
-        
-        if result.returncode == 0:
-            print("Benchmark completed successfully.")
-            return True
-        else:
-            print("Benchmark failed.")
-            return False
     
     def run_all(self, num_samples=1000, poorly_named_ratio=0.3, model_dir="/app/model/saved_models"):
         if self.build_image():
@@ -211,11 +139,6 @@ def main():
     test_parser = subparsers.add_parser("test", help="Test the classifier on a file")
     test_parser.add_argument("file_path", type=str, help="Path to the file to classify")
     
-    benchmark_parser = subparsers.add_parser("benchmark", help="Benchmark classifier performance on different file types")
-    benchmark_parser.add_argument("data_dir", type=str, help="Directory containing files to benchmark")
-    benchmark_parser.add_argument("--num-files", type=int, default=5, 
-                               help="Number of files of each type to test (default: 5)")
-    
     all_parser = subparsers.add_parser("all", help="Run all operations")
     all_parser.add_argument("--num-samples", type=int, default=1000,
                           help="Number of synthetic samples to generate (default: 1000)")
@@ -236,8 +159,6 @@ def main():
         return 0 if manager.train_model(args.model_dir) else 1
     elif args.command == "test":
         return 0 if manager.test_classifier(args.file_path) else 1
-    elif args.command == "benchmark":
-        return 0 if manager.run_benchmark(args.data_dir, args.num_files) else 1
     elif args.command == "all":
         return 0 if manager.run_all(args.num_samples, args.poorly_named_ratio, args.model_dir) else 1
     else:
