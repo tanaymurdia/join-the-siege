@@ -747,8 +747,14 @@ POLICYHOLDER SIGNATURE: __________________ DATE: __________
                 sample = self._generate_image(doc_type, file_format, poorly_named)
             else:
                 continue
+            
+            training_sample = {
+                "path": sample["path"],
+                "content": sample["content"],
+                "type": sample["type"]
+            }
                 
-            data.append(sample)
+            data.append(training_sample)
             
         metadata_df = pd.DataFrame(data)
         metadata_df.to_csv(self.output_dir / "metadata.csv", index=False)
@@ -758,7 +764,7 @@ POLICYHOLDER SIGNATURE: __________________ DATE: __________
         
         format_counts = {}
         for _, row in metadata_df.iterrows():
-            ext = os.path.splitext(row['filename'])[1][1:]
+            ext = os.path.splitext(row['path'])[1][1:]
             format_counts[ext] = format_counts.get(ext, 0) + 1
             
         for fmt, count in format_counts.items():

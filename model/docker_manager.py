@@ -83,7 +83,7 @@ class DockerManager:
         dir_path = os.path.dirname(file_path)
         file_name = os.path.basename(file_path)
         
-        print(f"Testing classifier on file: {file_name}")
+        print(f"Testing classifier on file: {file_name} (using content only, filename ignored)")
         
         cmd = [
             "docker-compose",
@@ -96,7 +96,7 @@ class DockerManager:
                 f"from model.classifier_trainer import AdvancedFileClassifier; "
                 f"classifier = AdvancedFileClassifier(); "
                 f"prediction = classifier.predict(file_path='/app/test_files/{file_name}'); "
-                f"print(f'Predicted class: {{prediction}}')"
+                f"print(f'Predicted class: {{prediction}} (based only on file content)')"
             )
         ]
         

@@ -268,7 +268,7 @@ class AdvancedFileClassifier:
             
             return file_features
         except Exception as e:
-            print(f"Error processing file {row.get('filename', 'unknown')}: {e}")
+            print(f"Error processing file {row.get('path', 'unknown')}: {e}")
             # Return empty embeddings if there's an error
             empty_features = {}
             for i in range(768):
@@ -310,6 +310,11 @@ class AdvancedFileClassifier:
         return model
     
     def train(self, data, test_size=0.2, random_state=42):
+        # Verify that we only have content-based features without filename
+        if 'filename' in data.columns:
+            print("Warning: 'filename' found in training data but will be ignored")
+            data = data.drop(columns=['filename'])
+            
         features_df = self._extract_features(data)
         
         X_train, X_test, y_train, y_test = train_test_split(
@@ -366,17 +371,14 @@ class AdvancedFileClassifier:
             print(f"Model file {model_path} not found")
             return False
     
-    def predict(self, file_path=None, file_obj=None, filename=None):
+    def predict(self, file_path=None, file_obj=None, filename=None, extension=None):
         start_time = time.time()
-        
+        print(f"Predicting file: {file_path}, {file_obj}, {filename}, {extension}")
         try:
             if self.classifier is None:
                 if not self.load_model():
                     raise ValueError("No classifier model available. Train or load a model first.")
             
-            if file_obj and not filename:
-                filename = file_obj.filename
-                
             if file_path is None and file_obj is not None:
                 temp_path = f"/tmp/temp_file_{int(time.time())}"
                 with open(temp_path, 'wb') as f:
@@ -384,11 +386,41 @@ class AdvancedFileClassifier:
                 file_path = temp_path
             
             data = pd.DataFrame([{
-                'filename': filename or os.path.basename(file_path),
                 'path': file_path
             }])
             
             features = self._extract_features(data)
+            
+            if hasattr(self.classifier, 'feature_names_in_'):                
+                if 'filename_length' in self.classifier.feature_names_in_:
+                    if filename:
+                        features['filename_length'] = len(filename)
+                    else:
+                        features['filename_length'] = 0
+                        
+                if 'extension' in self.classifier.feature_names_in_:
+                    if extension:
+                        features['extension'] = str(extension).lower()
+                    else:
+                        features['extension'] = 'unknown'
+                        
+                if 'filename_words' in self.classifier.feature_names_in_:
+                    if filename:
+                        words = ' '.join(re.findall(r'\w+', filename)).lower()
+                        features['filename_words'] = words
+                    else:
+                        features['filename_words'] = ''
+                
+                # Convert all features to strings where needed to prevent lower() errors
+                for feature in self.classifier.feature_names_in_:
+                    if feature not in features and feature.startswith('extension_'):
+                        features[feature] = '0'
+                    if feature not in features:
+                        print(f"Adding missing feature: {feature}")
+                        features[feature] = '0'
+                
+                print(f"Features being passed to model: {features.columns.tolist()}")
+            
             prediction = self.classifier.predict(features)[0]
             
             if file_obj and file_path.startswith("/tmp/"):
