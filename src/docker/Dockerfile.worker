@@ -17,16 +17,13 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the models to avoid downloading during startup
+# Download and cache the DistilBERT model during build
 RUN python -c "from transformers import AutoTokenizer, AutoModel; \
     tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased'); \
     model = AutoModel.from_pretrained('distilbert-base-uncased')"
 
 COPY . .
 
-# Set PYTHONPATH for proper module imports
 ENV PYTHONPATH=/app
 
-EXPOSE 5000
-
-CMD ["python", "-m", "src.main"] 
+CMD ["python", "-m", "src.services.worker"] 

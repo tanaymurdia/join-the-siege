@@ -4,17 +4,51 @@ services:
   api-service:
     build:
       context: .
-      dockerfile: src/Dockerfile
+      dockerfile: src/docker/Dockerfile.api
     volumes:
       - ./files:/app/files
       - ./model/saved_models:/app/model/saved_models
     environment:
       - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "5000:5000"
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+        reservations:
+          cpus: '0.5'
+  
+  worker:
+    build:
+      context: .
+      dockerfile: src/docker/Dockerfile.worker
+    volumes:
+      - ./files:/app/files
+      - ./model/saved_models:/app/model/saved_models
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
     deploy:
       resources:
         limits:
           cpus: '2'
         reservations:
           cpus: '1'
+  
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

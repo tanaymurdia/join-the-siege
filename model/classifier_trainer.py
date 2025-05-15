@@ -269,7 +269,6 @@ class AdvancedFileClassifier:
             return file_features
         except Exception as e:
             print(f"Error processing file {row.get('path', 'unknown')}: {e}")
-            # Return empty embeddings if there's an error
             empty_features = {}
             for i in range(768):
                 empty_features[f'content_emb_{i}'] = 0
@@ -310,7 +309,6 @@ class AdvancedFileClassifier:
         return model
     
     def train(self, data, test_size=0.2, random_state=42):
-        # Verify that we only have content-based features without filename
         if 'filename' in data.columns:
             print("Warning: 'filename' found in training data but will be ignored")
             data = data.drop(columns=['filename'])
@@ -411,16 +409,13 @@ class AdvancedFileClassifier:
                     else:
                         features['filename_words'] = ''
                 
-                # Convert all features to strings where needed to prevent lower() errors
                 for feature in self.classifier.feature_names_in_:
                     if feature not in features and feature.startswith('extension_'):
                         features[feature] = '0'
                     if feature not in features:
                         print(f"Adding missing feature: {feature}")
                         features[feature] = '0'
-                
-                print(f"Features being passed to model: {features.columns.tolist()}")
-            
+                            
             prediction = self.classifier.predict(features)[0]
             
             if file_obj and file_path.startswith("/tmp/"):
