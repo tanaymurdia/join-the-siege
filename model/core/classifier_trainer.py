@@ -120,6 +120,7 @@ class DocumentFeatureExtractor:
             if text.strip():
                 return text
                 
+            print("First OCR pass produced no text, trying preprocessing...")
             img_cv = cv2.imread(str(file_path))
             if img_cv is None:
                 return ""
@@ -134,6 +135,11 @@ class DocumentFeatureExtractor:
             
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+            
+            print("\n--- OCR EXTRACTED TEXT (SECOND PASS) ---")
+            print(text[:500] + ("..." if len(text) > 500 else ""))
+            print(f"Total characters: {len(text)}")
+            print("--- END OF OCR TEXT ---\n")
                 
             return text
                 
@@ -210,12 +216,42 @@ class AdvancedFileClassifier:
                 
                 for i, val in enumerate(content_embedding):
                     file_features[f'content_emb_{i}'] = val
+                
+                from model.core.data_generator import SyntheticDataGenerator
+                generator = SyntheticDataGenerator()
+                doc_types = generator.document_types
+                
+                content_lower = content.lower()
+                
+                for doc_type, type_info in doc_types.items():
+                    keywords = type_info["keywords"]
+                    match_count = 0
+                    unique_matches = set()
                     
+                    for keyword in keywords:
+                        keyword_lower = keyword.lower()
+                        occurrences = content_lower.count(keyword_lower)
+                        if occurrences > 0:
+                            match_count += occurrences
+                            unique_matches.add(keyword_lower)
+                    
+                    file_features[f'keyword_count_{doc_type}'] = match_count * 50.0  
+                    file_features[f'keyword_unique_{doc_type}'] = len(unique_matches) * 100.0  
+                    file_features[f'keyword_density_{doc_type}'] = (match_count / max(1, len(content.split()))) * 500.0  
+                
                 if 'content' not in row or not row['content']:
                     file_features['extracted_content'] = content
             else:
                 for i in range(768):
                     file_features[f'content_emb_{i}'] = 0
+                    
+                from model.core.data_generator import SyntheticDataGenerator
+                generator = SyntheticDataGenerator()
+                doc_types = generator.document_types
+                for doc_type in doc_types:
+                    file_features[f'keyword_count_{doc_type}'] = 0.0
+                    file_features[f'keyword_unique_{doc_type}'] = 0.0
+                    file_features[f'keyword_density_{doc_type}'] = 0.0
             
             return file_features
         except Exception as e:
@@ -223,6 +259,15 @@ class AdvancedFileClassifier:
             empty_features = {}
             for i in range(768):
                 empty_features[f'content_emb_{i}'] = 0
+                
+            from model.core.data_generator import SyntheticDataGenerator
+            generator = SyntheticDataGenerator()
+            doc_types = generator.document_types
+            for doc_type in doc_types:
+                empty_features[f'keyword_count_{doc_type}'] = 0.0
+                empty_features[f'keyword_unique_{doc_type}'] = 0.0
+                empty_features[f'keyword_density_{doc_type}'] = 0.0
+            
             return empty_features
     
     def _extract_features(self, data):
@@ -244,17 +289,33 @@ class AdvancedFileClassifier:
         return pd.DataFrame(features)
     
     def build_model(self):
+        from model.core.data_generator import SyntheticDataGenerator
+        generator = SyntheticDataGenerator()
+        doc_types = generator.document_types
+        
+        embedding_features = [f'content_emb_{i}' for i in range(768)]
+        keyword_count_features = [f'keyword_count_{doc_type}' for doc_type in doc_types]
+        keyword_unique_features = [f'keyword_unique_{doc_type}' for doc_type in doc_types]
+        keyword_density_features = [f'keyword_density_{doc_type}' for doc_type in doc_types]
+        
         content_pipeline = Pipeline([
             ('passthrough', FunctionTransformer())
         ])
         
+        keyword_pipeline = Pipeline([
+            ('passthrough', FunctionTransformer())
+        ])
+        
         feature_engineering = ColumnTransformer([
-            ('content_embeddings', content_pipeline, [f'content_emb_{i}' for i in range(768)])
+            ('content_embeddings', content_pipeline, embedding_features),
+            ('keyword_counts', keyword_pipeline, keyword_count_features),
+            ('keyword_unique', keyword_pipeline, keyword_unique_features),
+            ('keyword_density', keyword_pipeline, keyword_density_features)
         ])
         
         model = Pipeline([
             ('features', feature_engineering),
-            ('classifier', GradientBoostingClassifier(n_estimators=200, learning_rate=0.1, max_depth=5, random_state=42))
+            ('classifier', GradientBoostingClassifier(n_estimators=300, learning_rate=0.1, max_depth=5, random_state=42))
         ])
         
         return model
@@ -338,6 +399,42 @@ class AdvancedFileClassifier:
                 'path': file_path
             }])
             
+            content = self.feature_extractor.extract_text_from_file(file_path)
+            
+            keyword_prediction = None
+            keyword_confidence = 0
+            highest_score = 0
+            
+            if content.strip():
+                from model.core.data_generator import SyntheticDataGenerator
+                generator = SyntheticDataGenerator()
+                doc_types = generator.document_types
+                
+                type_scores = {}
+                for doc_type, type_info in doc_types.items():
+                    keywords = type_info["keywords"]
+                    matches = []
+                    for keyword in keywords:
+                        keyword_lower = keyword.lower()
+                        content_lower = content.lower()
+                        if keyword_lower in content_lower:
+                            matches.append(keyword)
+                    
+                    score = len(matches)
+                    type_scores[doc_type] = {"score": score, "matches": matches}
+                
+                sorted_scores = sorted(type_scores.items(), key=lambda x: x[1]["score"], reverse=True)
+                
+                for doc_type, info in sorted_scores:
+                    if info["score"] > 0:                        
+                        if info["score"] > highest_score:
+                            highest_score = info["score"]
+                            keyword_prediction = doc_type
+                            if len(sorted_scores) > 1 and sorted_scores[1][1]["score"] > 0:
+                                keyword_confidence = info["score"] / (info["score"] + sorted_scores[1][1]["score"])
+                            else:
+                                keyword_confidence = 1.0
+                            
             features = self._extract_features(data)
             
             if hasattr(self.classifier, 'feature_names_in_'):                
@@ -366,8 +463,14 @@ class AdvancedFileClassifier:
                     if feature not in features:
                         print(f"Adding missing feature: {feature}")
                         features[feature] = '0'
-                            
-            prediction = self.classifier.predict(features)[0]
+            
+            model_prediction = self.classifier.predict(features)[0]
+            
+            final_prediction = model_prediction
+            
+            if keyword_prediction and highest_score >= 3:
+                if keyword_confidence > 0.65 and keyword_prediction != model_prediction:
+                    final_prediction = keyword_prediction
             
             if file_obj and file_path.startswith("/tmp/"):
                 try:
@@ -378,7 +481,7 @@ class AdvancedFileClassifier:
             processing_time = time.time() - start_time
             print(f"Classification completed in {processing_time:.2f} seconds")
             
-            return prediction
+            return final_prediction
         except Exception as e:
             print(f"Error during prediction: {e}")
             return "unknown_file"

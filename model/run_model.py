@@ -4,11 +4,11 @@ Entry point for model operations. This script delegates to the appropriate Docke
 operations based on the command.
 
 Usage:
-    python -m model.run build            
-    python -m model.run generate-data    
-    python -m model.run train            
-    python -m model.run test <file_path> 
-    python -m model.run all              
+    python -m model.run_model build            
+    python -m model.run_model generate-data    
+    python -m model.run_model train            
+    python -m model.run_model test <file_path> 
+    python -m model.run_model all              
 """
 
 import sys

@@ -1,76 +1,183 @@
-# Heron Coding Challenge - File Classifier
+# Join The Siege Classification System
 
-## Overview
+A robust, scalable document classification system that can handle poorly named files, scale to new industries, and process large volumes of documents.
 
-At Heron, we’re using AI to automate document processing workflows in financial services and beyond. Each day, we handle over 100,000 documents that need to be quickly identified and categorised before we can kick off the automations.
+## Prerequisites
 
-This repository provides a basic endpoint for classifying files by their filenames. However, the current classifier has limitations when it comes to handling poorly named files, processing larger volumes, and adapting to new industries effectively.
+- Docker and Docker Compose
+- Python 3.8+ (for local development only)
 
-**Your task**: improve this classifier by adding features and optimisations to handle (1) poorly named files, (2) scaling to new industries, and (3) processing larger volumes of documents.
+### Installing Docker
 
-This is a real-world challenge that allows you to demonstrate your approach to building innovative and scalable AI solutions. We’re excited to see what you come up with! Feel free to take it in any direction you like, but we suggest:
+#### Windows
+1. Download and install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop)
+2. Start Docker Desktop after installation
 
+#### macOS
+1. Download and install [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop)
+2. Start Docker Desktop after installation
 
-### Part 1: Enhancing the Classifier
+#### Linux
+```bash
+# Update package index
+sudo apt-get update
 
-- What are the limitations in the current classifier that's stopping it from scaling?
-- How might you extend the classifier with additional technologies, capabilities, or features?
+# Install Docker dependencies
+sudo apt-get install apt-transport-https ca-certificates curl gnupg lsb-release
 
+# Add Docker's official GPG key
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
-### Part 2: Productionising the Classifier 
+# Set up stable repository
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-- How can you ensure the classifier is robust and reliable in a production environment?
-- How can you deploy the classifier to make it accessible to other services and users?
+# Install Docker Engine
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io
 
-We encourage you to be creative! Feel free to use any libraries, tools, services, models or frameworks of your choice
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+```
 
-### Possible Ideas / Suggestions
-- Train a classifier to categorize files based on the text content of a file
-- Generate synthetic data to train the classifier on documents from different industries
-- Detect file type and handle other file formats (e.g., Word, Excel)
-- Set up a CI/CD pipeline for automatic testing and deployment
-- Refactor the codebase to make it more maintainable and scalable
+## Installation
 
-## Marking Criteria
-- **Functionality**: Does the classifier work as expected?
-- **Scalability**: Can the classifier scale to new industries and higher volumes?
-- **Maintainability**: Is the codebase well-structured and easy to maintain?
-- **Creativity**: Are there any innovative or creative solutions to the problem?
-- **Testing**: Are there tests to validate the service's functionality?
-- **Deployment**: Is the classifier ready for deployment in a production environment?
-
-
-## Getting Started
 1. Clone the repository:
-    ```shell
-    git clone <repository_url>
-    cd heron_classifier
-    ```
+   ```bash
+   git clone https://github.com/tanaymurdia/join-the-siege
+   cd join-the-siege
+   ```
 
-2. Install dependencies:
-    ```shell
-    python -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-    ```
+2. Build the Docker images:
+   ```bash
+   python -m src.run_service build
+   python -m tests.run_tests build
+   ```
 
-3. Run the Flask app:
-    ```shell
-    python -m src.app
-    ```
+## Data Generation
 
-4. Test the classifier using a tool like curl:
-    ```shell
-    curl -X POST -F 'file=@path_to_pdf.pdf' http://127.0.0.1:5000/classify_file
-    ```
+Generate synthetic data for training the classification model:
 
-5. Run tests:
-   ```shell
-    pytest
-    ```
+```bash
+# Generate 1000 documents
+python -m model.run_model generate-data --num-samples 1000
+```
 
-## Submission
+This will create synthetic documents of various types (drivers licenses, bank statements, invoices, etc.) in the `files/synthetic` directory.
 
-Please aim to spend 3 hours on this challenge.
+## Model Training
 
-Once completed, submit your solution by sharing a link to your forked repository. Please also provide a brief write-up of your ideas, approach, and any instructions needed to run your solution. 
+Train the classifier using the generated synthetic data:
+
+```bash
+# Train using existing synthetic data
+python -m model.run_model train
+
+# Or generate data and train in one step
+python -m model.run_model all --num-samples 1000
+```
+
+The trained model will be saved in the `model/saved_models` directory.
+
+## Running the Service
+
+Start the classification service:
+
+```bash
+# Start all services (API, workers, Redis)
+python -m src.run_service start
+
+# Check service status
+python -m src.run_service status
+
+# Scale the number of worker instances
+python -m src.run_service scale 5
+
+# View service logs
+python -m src.run_service logs
+
+# Stop all services
+python -m src.run_service stop
+```
+
+By default, the API service will be accessible at `http://localhost:5000`.
+
+## API Endpoints
+
+### Classify a File
+```
+POST /classify_file
+```
+Upload a file for classification. Returns a task ID for checking the status.
+
+### Check Classification Status
+```
+GET /classification/{task_id}
+```
+Check the status and results of a classification task.
+
+### Check Worker Scaling Status
+```
+GET /scaling/status
+```
+View the current worker scaling metrics.
+
+### Adjust Worker Count
+```
+POST /scaling/workers/{count}
+```
+Adjust the number of worker instances.
+
+### Health Check
+```
+GET /health
+```
+Check the health of all services.
+
+## Testing
+
+The project includes comprehensive testing tools:
+
+```bash
+# Build test images
+python -m tests.run_tests build
+
+# Run unit tests
+python -m tests.run_tests unit
+
+# Run API tests only
+python -m tests.run_tests unit --api-only
+
+# Run service tests only
+python -m tests.run_tests unit --services-only
+
+# Run integration tests only
+python -m tests.run_tests unit --integration-only
+```
+
+
+## Full Workflow Example
+
+```bash
+# 1. Build Docker images
+python -m src.run_service build
+python -m tests.run_tests build
+
+# 2. Generate synthetic data and train model
+python -m model.run_model all --num-samples 2000 --poorly-named-ratio 0.3
+
+# 3. Start services
+python -m src.run_service start
+
+# 4. Scale to desired worker count
+python -m src.run_service scale 3
+
+# 5. Test classification with your files
+curl -X POST -F 'file=@path_to_your_file.pdf' http://localhost:5000/classify_file
+
+# 6. Run tests
+python -m tests.run_tests unit
+
+# 7. Stop services when done
+python -m src.run_service stop
+```

@@ -23,37 +23,32 @@ class SyntheticDataGenerator:
         
         self.document_types = {
             "drivers_license": {
-                "keywords": ["driver", "license", "identification", "ID", "operator", "permit", "DOB", "date of birth", "class", "issue date", "expiration", "restrictions", "endorsements", "organ donor"],
-                "formats": ["pdf", "jpg", "png"],
+                "keywords": ["driver", "license", "licence", "driving licence", "driving license", "driver's license", "driver's licence", "identification", "ID", "operator", "permit", "DOB", "date of birth", "class", "issue date", "expiration", "expires", "restrictions", "endorsements", "organ donor", "DVLA", "DL", "driving", "provisional", "wheeler", "vehicle", "motorist", "number", "license number", "licence number", "state", "sex", "gender", "height", "weight", "eyes", "eye color", "hair", "hair color", "address", "street", "city", "zip", "signature", "hawaii", "honolulu", "peace", "issue", "birth date", "valid", "status", "type"],
                 "naming_patterns": ["DL", "drivers_license", "license", "id_card", "identification"]
             },
             "bank_statement": {
                 "keywords": ["account", "balance", "transaction", "statement", "deposit", "withdraw", "bank", "checking", "savings", "beginning balance", "ending balance", "ATM", "credit", "debit", "ROUTING", "ACCOUNT NO"],
-                "formats": ["pdf", "csv"],
                 "naming_patterns": ["statement", "bank_statement", "account", "transactions", "monthly_statement", "checking_statement", "savings_statement"]
             },
             "invoice": {
                 "keywords": ["invoice", "bill", "payment", "due date", "amount due", "total", "subtotal", "tax", "invoice number", "purchase order", "item", "quantity", "unit price", "amount", "terms", "ship to", "bill to"],
-                "formats": ["pdf", "docx"],
                 "naming_patterns": ["invoice", "bill", "receipt", "payment", "invoice_no", "inv", "billing"]
             },
             "tax_return": {
                 "keywords": ["tax", "return", "IRS", "income", "deduction", "filing", "W-2", "1099", "Form 1040", "exemption", "refund", "tax year", "adjusted gross income", "taxable income", "tax due", "withholding"],
-                "formats": ["pdf"],
                 "naming_patterns": ["tax_return", "taxes", "irs", "form1040", "tax_filing", "1040", "tax_year"]
             },
             "medical_record": {
                 "keywords": ["patient", "diagnosis", "prescription", "doctor", "hospital", "medical", "treatment", "health", "insurance", "medication", "allergies", "symptoms", "vital signs", "medical history", "physical examination"],
-                "formats": ["pdf", "docx"],
                 "naming_patterns": ["medical", "health_record", "patient", "hospital", "med_record", "clinical", "health_summary"]
             },
             "insurance_claim": {
                 "keywords": ["claim", "policy", "insurance", "coverage", "premium", "beneficiary", "policyholder", "insurer", "claim number", "incident", "damage", "loss", "liability", "deductible", "coverage limits"],
-                "formats": ["pdf", "docx"],
                 "naming_patterns": ["insurance", "claim", "policy", "claim_form", "insurance_claim", "policy_claim"]
             }
         }
         
+        self.supported_formats = ["pdf", "docx", "jpg", "png", "csv"]
         self.background_colors = [(255, 255, 255), (250, 250, 250), (245, 245, 245), (240, 240, 240)]
         self.text_colors = [(0, 0, 0), (50, 50, 50), (25, 25, 112), (0, 0, 128)]
         
@@ -501,26 +496,31 @@ POLICYHOLDER SIGNATURE: __________________ DATE: __________
         return content
     
     def _generate_random_text(self, doc_type):
-        if doc_type == "drivers_license":
-            return self._generate_drivers_license_content()
-        elif doc_type == "bank_statement":
-            return self._generate_bank_statement_content()
-        elif doc_type == "invoice":
-            return self._generate_invoice_content()
-        elif doc_type == "tax_return":
-            return self._generate_tax_return_content()
-        elif doc_type == "medical_record":
-            return self._generate_medical_record_content()
-        elif doc_type == "insurance_claim":
-            return self._generate_insurance_claim_content()
+        content_generators = {
+            "drivers_license": self._generate_drivers_license_content,
+            "bank_statement": self._generate_bank_statement_content,
+            "invoice": self._generate_invoice_content,
+            "tax_return": self._generate_tax_return_content,
+            "medical_record": self._generate_medical_record_content,
+            "insurance_claim": self._generate_insurance_claim_content
+        }
+        
+        if doc_type in content_generators:
+            content = content_generators[doc_type]()
         else:
-            text = self.fake.text(max_nb_chars=2000)
-            keywords = self.document_types[doc_type]["keywords"]
-            for _ in range(random.randint(5, 15)):
-                keyword = random.choice(keywords)
-                position = random.randint(0, len(text) - len(keyword) - 1)
-                text = text[:position] + keyword + text[position + len(keyword):]
-            return text
+            content = self.fake.text(max_nb_chars=2000)
+            
+        keywords = self.document_types[doc_type]["keywords"]
+        random_words = self.fake.words(nb=10)
+        
+        injected_words = keywords * 3 + random_words
+        
+        for _ in range(random.randint(20, 40)):
+            word = random.choice(injected_words)
+            position = random.randint(0, max(0, len(content) - len(word) - 1))
+            content = content[:position] + " " + word + " " + content[position:]
+            
+        return content
     
     def _get_random_filename(self, doc_type, file_format):
         patterns = self.document_types[doc_type]["naming_patterns"]
@@ -589,62 +589,8 @@ POLICYHOLDER SIGNATURE: __________________ DATE: __________
         document = docx.Document()
         content = self._generate_random_text(doc_type)
         
-        if doc_type == "invoice":
-            title = document.add_heading(f"{random.choice(self.companies)}", 0)
-            document.add_heading("INVOICE", 1)
-            title.alignment = 1
-            
-            sections = content.split('\n\n')
-            for section in sections:
-                if section.strip():
-                    if "DESCRIPTION" in section:
-                        table = document.add_table(rows=1, cols=4)
-                        table.style = 'Table Grid'
-                        header_cells = table.rows[0].cells
-                        header_cells[0].text = "DESCRIPTION"
-                        header_cells[1].text = "QUANTITY"
-                        header_cells[2].text = "UNIT PRICE"
-                        header_cells[3].text = "AMOUNT"
-                        
-                        lines = [line for line in section.split('\n') if line.strip() and "DESCRIPTION" not in line]
-                        for line in lines:
-                            parts = line.split('$')
-                            if len(parts) >= 3:
-                                desc_qty = parts[0].split()
-                                if len(desc_qty) >= 2:
-                                    qty = desc_qty[-1]
-                                    desc = ' '.join(desc_qty[:-1])
-                                    unit_price = parts[1].strip()
-                                    amount = parts[2].strip()
-                                    
-                                    row_cells = table.add_row().cells
-                                    row_cells[0].text = desc
-                                    row_cells[1].text = qty
-                                    row_cells[2].text = f"${unit_price}"
-                                    row_cells[3].text = f"${amount}"
-                    elif "SUBTOTAL" in section:
-                        lines = section.strip().split('\n')
-                        for line in lines:
-                            document.add_paragraph(line)
-                    else:
-                        document.add_paragraph(section)
-        elif doc_type == "medical_record":
-            document.add_heading("MEDICAL RECORD", 0)
-            
-            sections = content.split('\n\n')
-            for section in sections:
-                if section.strip():
-                    header_lines = ["PATIENT INFORMATION", "VISIT INFORMATION", "CHIEF COMPLAINT", 
-                                   "VITAL SIGNS", "MEDICAL HISTORY", "CURRENT MEDICATIONS", 
-                                   "ALLERGIES", "ASSESSMENT", "TREATMENT PLAN"]
-                    
-                    if any(header in section for header in header_lines):
-                        document.add_heading(section.split(':')[0], level=1)
-                        document.add_paragraph(section.split(':', 1)[1] if ':' in section else section)
-                    else:
-                        document.add_paragraph(section)
-        else:
-            document.add_paragraph(content)
+        document.add_heading(doc_type.replace("_", " ").title(), 0)
+        document.add_paragraph(content)
         
         if poorly_named:
             filename = f"{self.fake.word()}_{self.fake.random_number(digits=3)}.docx"
@@ -680,39 +626,16 @@ POLICYHOLDER SIGNATURE: __________________ DATE: __________
             font = ImageFont.load_default()
             title_font = ImageFont.load_default()
         
-        if doc_type == "drivers_license":
-            state_abbr = content.split('\n')[1].strip()
-            draw.rectangle([(50, 50), (width-50, height-50)], outline=(200, 200, 200), width=2)
-            
-            draw.text((width//2, 100), f"{state_abbr} DRIVER LICENSE", fill=(0, 0, 150), font=title_font, anchor="mm")
-            
-            lines = content.strip().split('\n')
-            y_position = 180
-            for line in lines[2:]:
-                if line.strip():
-                    if ":" in line:
-                        label, value = line.split(":", 1)
-                        draw.text((100, y_position), label + ":", fill=(100, 100, 100), font=font)
-                        draw.text((300, y_position), value, fill=text_color, font=font)
-                    else:
-                        draw.text((width//2, y_position), line, fill=text_color, font=font, anchor="mm")
-                y_position += 40
-            
-            placeholder_img = Image.new('RGB', (300, 350), color=(200, 200, 200))
-            image.paste(placeholder_img, (width-400, 250))
-            draw.text((width-250, 425), "PHOTO", fill=(150, 150, 150), font=font, anchor="mm")
-            
-        else:
-            title = doc_type.replace("_", " ").title()
-            draw.text((width//2, 100), title, fill=text_color, font=title_font, anchor="mm")
-            
-            wrapped_text = textwrap.fill(content, width=65)
-            
-            y_position = 180
-            for line in wrapped_text.split('\n'):
-                draw.text((100, y_position), line, fill=text_color, font=font)
-                y_position += 30
-            
+        title = doc_type.replace("_", " ").title()
+        draw.text((width//2, 100), title, fill=text_color, font=title_font, anchor="mm")
+        
+        wrapped_text = textwrap.fill(content, width=65)
+        
+        y_position = 180
+        for line in wrapped_text.split('\n'):
+            draw.text((100, y_position), line, fill=text_color, font=font)
+            y_position += 30
+        
         if poorly_named:
             filename = f"{self.fake.word()}_{self.fake.random_number(digits=3)}.{image_format}"
         else:
@@ -729,32 +652,90 @@ POLICYHOLDER SIGNATURE: __________________ DATE: __________
             "poorly_named": poorly_named
         }
     
+    def _generate_csv(self, doc_type, poorly_named=False):
+        content = self._generate_random_text(doc_type)
+        
+        if poorly_named:
+            filename = f"{self.fake.word()}_{self.fake.random_number(digits=3)}.csv"
+        else:
+            filename = self._get_random_filename(doc_type, "csv")
+            
+        file_path = self.output_dir / filename
+        
+        headers = ["id", "date", "type", "description", "value", "keywords"]
+        rows = []
+        
+        for i in range(random.randint(10, 20)):
+            keywords = random.sample(self.document_types[doc_type]["keywords"] * 2, 
+                                   k=min(random.randint(4, 8), len(self.document_types[doc_type]["keywords"] * 2)))
+            keywords_str = "|".join(keywords)
+            
+            desc_prefix = random.choice([
+                f"{doc_type.replace('_', ' ').title()} - ",
+                f"Document type: {doc_type.replace('_', ' ')} - ",
+                f"{random.choice(self.document_types[doc_type]['keywords']).upper()}: "
+            ])
+            
+            row = {
+                "id": f"{self.fake.bothify(text='???###')}",
+                "date": self.fake.date_between(start_date="-1y", end_date="today").strftime("%Y-%m-%d"),
+                "type": doc_type.replace("_", " ").title(),
+                "description": desc_prefix + self.fake.sentence(),
+                "value": f"${self.fake.random_number(digits=4)}.{self.fake.random_number(digits=2)}",
+                "keywords": keywords_str
+            }
+            rows.append(row)
+        
+        with open(file_path, 'w', newline='') as f:
+            f.write(','.join(headers) + '\n')
+            for row in rows:
+                values = []
+                for header in headers:
+                    value = str(row[header])
+                    if ',' in value:
+                        value = f'"{value}"'
+                    values.append(value)
+                f.write(','.join(values) + '\n')
+        
+        return {
+            "filename": filename,
+            "path": str(file_path),
+            "content": content,
+            "type": doc_type,
+            "poorly_named": poorly_named
+        }
+    
+    def _generate_file(self, doc_type, file_format, poorly_named=False):
+        generators = {
+            "pdf": self._generate_pdf,
+            "docx": self._generate_docx,
+            "jpg": lambda dt, pn: self._generate_image(dt, "jpg", pn),
+            "png": lambda dt, pn: self._generate_image(dt, "png", pn),
+            "csv": self._generate_csv
+        }
+        
+        if file_format in generators:
+            return generators[file_format](doc_type, poorly_named)
+        else:
+            return None
+    
     def generate_dataset(self, num_samples=1000, poorly_named_ratio=0.3):
         data = []
         
         for _ in tqdm(range(num_samples), desc="Generating synthetic files"):
             doc_type = random.choice(list(self.document_types.keys()))
-            formats = self.document_types[doc_type]["formats"]
-            file_format = random.choice(formats)
+            file_format = random.choice(self.supported_formats)
             
             poorly_named = random.random() < poorly_named_ratio
             
-            if file_format == "pdf":
-                sample = self._generate_pdf(doc_type, poorly_named)
-            elif file_format == "docx":
-                sample = self._generate_docx(doc_type, poorly_named)
-            elif file_format in ["jpg", "png"]:
-                sample = self._generate_image(doc_type, file_format, poorly_named)
-            else:
-                continue
-            
-            training_sample = {
-                "path": sample["path"],
-                "content": sample["content"],
-                "type": sample["type"]
-            }
-                
-            data.append(training_sample)
+            sample = self._generate_file(doc_type, file_format, poorly_named)
+            if sample:
+                training_sample = {
+                    "path": sample["path"],
+                    "content": sample["content"],
+                    "type": sample["type"]
+                }
+                data.append(training_sample)
             
         metadata_df = pd.DataFrame(data)
         metadata_df.to_csv(self.output_dir / "metadata.csv", index=False)
