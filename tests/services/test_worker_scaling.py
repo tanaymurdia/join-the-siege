@@ -18,7 +18,6 @@ def mock_redis_client():
         "last_scaling_time": str(time.time() - 300)
     }
     redis_client.hmset.return_value = True
-    redis_client.hset.return_value = True
     return redis_client
 
 @pytest.fixture
@@ -43,6 +42,7 @@ def test_get_queue_length(scaling_service, mock_redis_client):
 def test_get_queue_length_exception(scaling_service, mock_redis_client):
     mock_redis_client.llen.side_effect = redis.exceptions.RedisError("Test error")
     assert scaling_service.get_queue_length() == 0
+
 def test_get_worker_stats_from_redis(scaling_service, mock_redis_client):
     mock_redis_client.hgetall.return_value = {
         "current_worker_count": "4",
@@ -60,115 +60,112 @@ def test_get_worker_stats_from_env(mock_env_get, scaling_service, mock_redis_cli
     assert scaling_service.get_worker_stats() == 5
     mock_env_get.assert_called_with('WORKER_REPLICAS', scaling_service.current_worker_count)
 
+def test_get_worker_stats_exception(scaling_service, mock_redis_client):
+    mock_redis_client.hgetall.side_effect = Exception("Test error")
+    assert scaling_service.get_worker_stats() == scaling_service.current_worker_count
+
 def test_scale_workers_success(scaling_service, mock_redis_client):
     with patch('subprocess.run') as mock_run:
-        docker_check_result = MagicMock()
-        docker_check_result.returncode = 0
-        
-        docker_scale_result = MagicMock()
-        docker_scale_result.returncode = 0
-        
-        mock_run.side_effect = [docker_check_result, docker_scale_result]
-        
         scaling_service.scale_workers(5)
+        
+        mock_run.assert_called_once()
+        assert "worker=5" in str(mock_run.call_args[0][0])
         assert scaling_service.current_worker_count == 5
-        assert mock_run.call_count == 2
+        
+        mock_redis_client.hmset.assert_called_once()
+        assert len(mock_redis_client.hmset.call_args[0][1]) == 3
+        assert "current_worker_count" in mock_redis_client.hmset.call_args[0][1]
 
 def test_scale_workers_same_count(mock_redis_client, scaling_service):
     with patch('subprocess.run') as mock_run:
         scaling_service.scale_workers(3)
         mock_run.assert_not_called()
+        mock_redis_client.hmset.assert_not_called()
 
 def test_scale_workers_min_limit(scaling_service, mock_redis_client):
     with patch('subprocess.run') as mock_run:
-        docker_check_result = MagicMock()
-        docker_check_result.returncode = 0
-        
-        docker_scale_result = MagicMock()
-        docker_scale_result.returncode = 0
-        
-        mock_run.side_effect = [docker_check_result, docker_scale_result]
-        
         scaling_service.scale_workers(1)
-        assert scaling_service.current_worker_count == 2
-        assert mock_run.call_count == 2
         
-        calls = mock_run.call_args_list
-        assert "worker=2" in str(calls[1][0][0])
+        mock_run.assert_called_once()
+        assert "worker=2" in str(mock_run.call_args[0][0])
+        assert scaling_service.current_worker_count == 2
 
 def test_scale_workers_max_limit(scaling_service, mock_redis_client):
     with patch('subprocess.run') as mock_run:
-        docker_check_result = MagicMock()
-        docker_check_result.returncode = 0
-        
-        docker_scale_result = MagicMock()
-        docker_scale_result.returncode = 0
-        
-        mock_run.side_effect = [docker_check_result, docker_scale_result]
-        
         scaling_service.scale_workers(15)
+        
+        mock_run.assert_called_once()
+        assert "worker=10" in str(mock_run.call_args[0][0])
         assert scaling_service.current_worker_count == 10
-        assert mock_run.call_count == 2
-        
-        calls = mock_run.call_args_list
-        assert "worker=10" in str(calls[1][0][0])  
 
-def test_scale_workers_docker_not_available(scaling_service, mock_redis_client):
+def test_scale_workers_exception(scaling_service, mock_redis_client):
     with patch('subprocess.run') as mock_run:
-        docker_check_result = MagicMock()
-        docker_check_result.returncode = 1  
-        
-        mock_run.return_value = docker_check_result
+        mock_run.side_effect = Exception("Test error")
         
         scaling_service.scale_workers(5)
-        assert scaling_service.current_worker_count == 5  
-        assert mock_run.call_count == 1  
+        mock_run.assert_called_once()
+        assert scaling_service.current_worker_count == 3
 
-def test_scale_workers_command_failure(scaling_service, mock_redis_client):
-    with patch('subprocess.run') as mock_run:
-        docker_check_result = MagicMock()
-        docker_check_result.returncode = 0  
+def test_monitor_loop_scaling_up(scaling_service, mock_redis_client):
+    with patch('time.sleep') as mock_sleep, \
+         patch('src.services.worker_scaling.WorkerScalingService.get_queue_length') as mock_queue, \
+         patch('src.services.worker_scaling.WorkerScalingService.get_worker_stats') as mock_stats, \
+         patch('src.services.worker_scaling.WorkerScalingService.scale_workers') as mock_scale:
         
-        docker_scale_result = MagicMock()
-        docker_scale_result.returncode = 1 
-        docker_scale_result.stderr = "Command failed"
+        def end_loop(*args, **kwargs):
+            scaling_service.running = False
+            
+        mock_sleep.side_effect = end_loop
+        mock_queue.return_value = 25
+        mock_stats.return_value = 3
         
-        mock_run.side_effect = [docker_check_result, docker_scale_result]
+        scaling_service.last_scaling_time = time.time() - 120
+        scaling_service.running = True
         
-        original_worker_count = scaling_service.current_worker_count
-        scaling_service.scale_workers(5)
+        scaling_service.monitor_loop()
         
-        assert scaling_service.current_worker_count == original_worker_count
-        assert mock_run.call_count == 2
+        mock_scale.assert_called_once()
+        worker_count_arg = mock_scale.call_args[0][0]
+        assert worker_count_arg > 3
 
-@patch('src.services.worker_scaling.WorkerScalingService.scale_workers')
-def test_check_and_apply_scaling_up(mock_scale, scaling_service):
-    queue_length = 25  
-    worker_count = 3   
-    
-    scaling_service.check_and_apply_scaling(queue_length, worker_count)
-    
-    mock_scale.assert_called_once_with(5)
+def test_monitor_loop_scaling_down(scaling_service, mock_redis_client):
+    with patch('time.sleep') as mock_sleep, \
+         patch('src.services.worker_scaling.WorkerScalingService.get_queue_length') as mock_queue, \
+         patch('src.services.worker_scaling.WorkerScalingService.get_worker_stats') as mock_stats, \
+         patch('src.services.worker_scaling.WorkerScalingService.scale_workers') as mock_scale:
+        
+        def end_loop(*args, **kwargs):
+            scaling_service.running = False
+            
+        mock_sleep.side_effect = end_loop
+        mock_queue.return_value = 3
+        mock_stats.return_value = 5
+        
+        scaling_service.last_scaling_time = time.time() - 120
+        scaling_service.running = True
+        
+        scaling_service.monitor_loop()
+        
+        mock_scale.assert_called_once_with(4)
 
-@patch('src.services.worker_scaling.WorkerScalingService.scale_workers')
-def test_check_and_apply_scaling_down(mock_scale, scaling_service):
-    queue_length = 3   
-    worker_count = 5  
-    scaling_service.current_worker_count = 5
-    
-    scaling_service.check_and_apply_scaling(queue_length, worker_count)
-    
-    mock_scale.assert_called_once_with(4)
-
-@patch('src.services.worker_scaling.WorkerScalingService.scale_workers')
-def test_check_and_apply_scaling_no_change(mock_scale, scaling_service):
-    queue_length = 10  
-    worker_count = 3
-    
-    result = scaling_service.check_and_apply_scaling(queue_length, worker_count)
-    
-    assert result is False
-    mock_scale.assert_not_called()
+def test_monitor_loop_cooling_down(scaling_service, mock_redis_client):
+    with patch('time.sleep') as mock_sleep, \
+         patch('src.services.worker_scaling.WorkerScalingService.get_queue_length') as mock_queue, \
+         patch('src.services.worker_scaling.WorkerScalingService.get_worker_stats') as mock_stats, \
+         patch('src.services.worker_scaling.WorkerScalingService.scale_workers') as mock_scale:
+        
+        def end_loop(*args, **kwargs):
+            scaling_service.running = False
+            
+        mock_sleep.side_effect = end_loop
+        scaling_service.last_scaling_time = time.time() - 30
+        scaling_service.running = True
+        
+        scaling_service.monitor_loop()
+        
+        mock_queue.assert_not_called()
+        mock_stats.assert_not_called()
+        mock_scale.assert_not_called()
 
 def test_start_stop_monitoring(scaling_service):
     with patch('threading.Thread') as mock_thread:

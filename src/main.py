@@ -205,15 +205,26 @@ async def get_scaling_status():
                 
         return WorkerScalingStatusResponse(**metrics)
     except redis.exceptions.ConnectionError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Scaling service temporarily unavailable due to Redis connection issues."
+        logger.warning("Redis connection error in get_scaling_status")
+        return WorkerScalingStatusResponse(
+            current_worker_count=scaling_service.current_worker_count,
+            min_workers=scaling_service.worker_min_count,
+            max_workers=scaling_service.worker_max_count,
+            worker_count=scaling_service.get_worker_stats(),
+            queue_length=scaling_service.get_queue_length(),
+            timestamp=time.time(),
+            last_scaling_time=0
         )
     except Exception as e:
         logger.error(f"Error getting scaling status: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving scaling status: {str(e)}"
+        return WorkerScalingStatusResponse(
+            current_worker_count=scaling_service.current_worker_count,
+            min_workers=scaling_service.worker_min_count,
+            max_workers=scaling_service.worker_max_count,
+            worker_count=scaling_service.get_worker_stats(),
+            queue_length=scaling_service.get_queue_length(),
+            timestamp=time.time(),
+            last_scaling_time=0
         )
 
 @app.post("/scaling/workers/{count}")
@@ -257,10 +268,16 @@ async def health_check():
         )
     except Exception as e:
         logger.error(f"Health check error: {str(e)}")
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"status": "unhealthy", "error": str(e)}
-        )
+        if "redis" in str(e).lower():
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": "unhealthy", "components": {"api": "up", "redis": "down", "workers": {"status": "unknown", "count": 0}}}
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": "unhealthy", "error": str(e)}
+            )
 
 if __name__ == "__main__":
     uvicorn.run("src.main:app", host="0.0.0.0", port=5000, reload=True) 

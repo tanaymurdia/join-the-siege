@@ -79,36 +79,21 @@ class DocumentFeatureExtractor:
         return False
     
     def extract_text_from_pdf(self, file_path):
-        if not self.needs_ocr(file_path):
-            try:
-                with pdfplumber.open(file_path) as pdf:
-                    text = ""
-                    for page in pdf.pages:
-                        extracted = page.extract_text() or ""
-                        text += extracted
-                    if text.strip():
-                        return text
-            except Exception as e:
-                print(f"Error with pdfplumber on {file_path}: {e}")
-                pass
-                
-            try:
-                with open(file_path, "rb") as f:
-                    reader = PyPDF2.PdfReader(f)
-                    text = ""
-                    for page in reader.pages:
-                        extracted = page.extract_text() or ""
-                        text += extracted
-                    if text.strip():
-                        return text
-            except Exception as e:
-                print(f"Error with PyPDF2 on {file_path}: {e}")
-                pass
-        
-        try:
+        if self.needs_ocr(file_path):
             return self.extract_text_from_image(file_path)
+            
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                text = "".join([page.extract_text() or "" for page in pdf.pages])
+                if text.strip():
+                    return text
+                    
+            with open(file_path, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                text = "".join([page.extract_text() or "" for page in reader.pages])
+                return text
         except Exception as e:
-            print(f"Could not extract text from PDF {file_path}: {e}")
+            print(f"PDF extraction failed for {file_path}: {e}")
             return ""
     
     def extract_text_from_docx(self, file_path):
@@ -120,74 +105,40 @@ class DocumentFeatureExtractor:
             return ""
             
     def extract_text_from_image(self, file_path):
-        if not self.ocr_available:
-            print(f"Skipping OCR for {file_path} as Tesseract is not available")
+        if not self.ocr_available or not self.needs_ocr(file_path):
             return ""
             
         try:
-            if not self.needs_ocr(file_path):
-                return ""
-                
-            try:
-                image = Image.open(file_path)
-            except Exception as e:
-                print(f"Cannot open image file {file_path}: {e}")
-                return ""
-                
-            orig_width, orig_height = image.size
+            image = Image.open(file_path)
             
+            orig_width, orig_height = image.size
             if max(orig_width, orig_height) > 2000:
                 scale_factor = 2000 / max(orig_width, orig_height)
-                new_width = int(orig_width * scale_factor)
-                new_height = int(orig_height * scale_factor)
-                image = image.resize((new_width, new_height), Image.LANCZOS)
+                image = image.resize((int(orig_width * scale_factor), int(orig_height * scale_factor)), Image.LANCZOS)
             
-            try:
-                direct_text = pytesseract.image_to_string(
-                    image,
-                    config='--oem 1 --psm 3'  
-                )
-                if direct_text.strip():
-                    return direct_text
-            except Exception as e:
-                print(f"Direct OCR failed on {file_path}: {e}")
+            text = pytesseract.image_to_string(image, config='--oem 1 --psm 3')
+            if text.strip():
+                return text
+                
+            img_cv = cv2.imread(str(file_path))
+            if img_cv is None:
+                return ""
+                
+            gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+            _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
             
-            try:
-                img_cv = cv2.imread(str(file_path))
-                if img_cv is not None:
-                    gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                    
-                    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-                    
-                    temp_path = str(file_path) + "_temp.jpg"
-                    cv2.imwrite(temp_path, thresh)
-                    
-                    try:
-                        processed_text = pytesseract.image_to_string(
-                            Image.open(temp_path),
-                            config='--oem 1 --psm 3'  
-                        )
-                        
-                        try:
-                            os.remove(temp_path)
-                        except:
-                            pass
-                            
-                        if processed_text.strip():
-                            return processed_text
-                    except Exception as e:
-                        print(f"OCR on preprocessed image failed: {e}")
-                        try:
-                            os.remove(temp_path)
-                        except:
-                            pass
-            except Exception as e:
-                print(f"OpenCV preprocessing failed on {file_path}: {e}")
+            temp_path = f"{file_path}_temp.jpg"
+            cv2.imwrite(temp_path, thresh)
             
-            return ""
+            text = pytesseract.image_to_string(Image.open(temp_path), config='--oem 1 --psm 3')
             
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+            return text
+                
         except Exception as e:
-            print(f"Error extracting text from image {file_path}: {e}")
+            print(f"OCR failed for {file_path}: {e}")
             return ""
     
     def extract_text_from_file(self, file_path):
