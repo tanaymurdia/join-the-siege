@@ -9,8 +9,9 @@ import time
 
 class DockerManager:
     def __init__(self):
-        self.root_dir = Path(__file__).parent.parent.absolute()
-        self.docker_compose_file = self.root_dir / "model" / "docker-compose.yml"
+        self.root_dir = Path(__file__).parent.parent.parent.absolute()
+        self.docker_dir = Path(__file__).parent.parent / "docker"
+        self.docker_compose_file = self.docker_dir / "docker-compose.yml"
         self.container_name = "file-classifier"
         
     def build_image(self):
@@ -37,7 +38,7 @@ class DockerManager:
             "run",
             "--rm",
             self.container_name,
-            "-m", "model.data_generator",
+            "-m", "model.core.data_generator",
             "--output-dir", "/app/files/synthetic",
             "--num-samples", str(num_samples),
             "--poorly-named-ratio", str(poorly_named_ratio)
@@ -60,7 +61,7 @@ class DockerManager:
             "run",
             "--rm",
             self.container_name,
-            "-m", "model.train",
+            "-m", "model.core.train",
             "--model-dir", model_dir,
             "--output-dir", "/app/files/synthetic"
         ]
@@ -93,7 +94,7 @@ class DockerManager:
             "-v", f"{dir_path}:/app/test_files",
             self.container_name,
             "-c", (
-                f"from model.classifier_trainer import AdvancedFileClassifier; "
+                f"from model.core.classifier_trainer import AdvancedFileClassifier; "
                 f"classifier = AdvancedFileClassifier(); "
                 f"prediction = classifier.predict(file_path='/app/test_files/{file_name}'); "
                 f"print(f'Predicted class: {{prediction}} (based only on file content)')"

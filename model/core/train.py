@@ -3,8 +3,8 @@ from pathlib import Path
 import os
 import pandas as pd
 
-from model.data_generator import SyntheticDataGenerator
-from model.classifier_trainer import AdvancedFileClassifier
+from model.core.data_generator import SyntheticDataGenerator
+from model.core.classifier_trainer import AdvancedFileClassifier
 
 def main():
     parser = argparse.ArgumentParser(description='Train and save the file classifier model')

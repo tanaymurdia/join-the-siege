@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
   file-classifier:
     build:
-      context: ..
-      dockerfile: model/Dockerfile
+      context: ../..
+      dockerfile: model/docker/Dockerfile
     volumes:
-      - ../files:/app/files
-      - ../model/saved_models:/app/model/saved_models
+      - ../../files:/app/files
+      - ../../model/saved_models:/app/model/saved_models
     environment:
       - PYTHONUNBUFFERED=1
     ports:

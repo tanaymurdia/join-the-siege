@@ -9,7 +9,6 @@ import uuid
 from src.services.message_broker import MessageBroker
 from src.models.response_models import ClassificationResponse
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -18,7 +17,6 @@ logging.basicConfig(
     ]
 )
 
-# Create loggers
 logger = logging.getLogger('api')
 logging.getLogger('message_broker').setLevel(logging.INFO)
 logging.getLogger('uvicorn').setLevel(logging.INFO)

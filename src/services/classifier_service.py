@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 from pathlib import Path
-from model.classifier_trainer import AdvancedFileClassifier
+from model.core.classifier_trainer import AdvancedFileClassifier
 
 logger = logging.getLogger('classifier_service')
 

@@ -6,7 +6,6 @@ import logging
 from src.services.message_broker import MessageBroker
 from src.services.classifier_service import ClassifierService
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -15,7 +14,6 @@ logging.basicConfig(
     ]
 )
 
-# Create loggers
 logger = logging.getLogger('worker')
 logging.getLogger('message_broker').setLevel(logging.INFO)
 logging.getLogger('classifier_service').setLevel(logging.INFO)
@@ -45,7 +43,6 @@ class ClassificationWorker:
             logger.info(f"Checking file path: {file_path}")
             
             if not os.path.exists(file_path):
-                # Try with the absolute path in the container
                 absolute_path = os.path.join('/app', file_path)
                 logger.info(f"File not found, trying absolute path: {absolute_path}")
                 

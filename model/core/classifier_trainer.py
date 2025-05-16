@@ -433,7 +433,7 @@ class AdvancedFileClassifier:
             return "unknown_file"
 
 if __name__ == "__main__":
-    from model.data_generator import SyntheticDataGenerator
+    from model.core.data_generator import SyntheticDataGenerator
     
     print("Generating synthetic training data...")
     generator = SyntheticDataGenerator(output_dir="files/synthetic")
