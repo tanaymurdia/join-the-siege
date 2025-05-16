@@ -16,21 +16,21 @@ A robust, scalable document classification system that can handle poorly named f
   - [Testing](#testing)
 - [Complete Workflow](#complete-workflow)
 - [Technical Details](#technical-details)
-  - [How We Address Key Challenges](#how-we-address-key-challenges)
+  - [How I Address Key Challenges](#how-i-address-key-challenges)
   - [High-Volume Processing](#high-volume-processing)
   - [Processing Capacity](#processing-capacity)
   - [Future Roadmap](#future-roadmap)
 
 ## Overview
 
-The Heron Classification System is designed to automatically classify documents based on their content, regardless of filename quality. It processes documents at scale using a distributed architecture with auto-scaling workers, making it suitable for high-volume environments.
+The Heron Classification System is designed to automatically classify documents based on their content, regardless of filename quality. It processes documents at scale using a distributed architecture with configurable workers, making it suitable for high-volume environments.
 
 ## Key Features
 
 - **Content-based classification** using OCR and BERT embeddings
 - **Multiple file format support** (PDF, DOCX, images, CSV)
 - **Distributed processing architecture** with Redis queue
-- **Auto-scaling worker system** for handling varying loads
+- **Configurable worker scaling** for handling varying loads
 - **Comprehensive testing suite** including unit, integration, and load tests
 - **Docker-based deployment** for consistent environments
 
@@ -221,11 +221,11 @@ python -m src.run_service stop
 
 ## Technical Details
 
-### How We Address Key Challenges
+### How I Address Key Challenges
 
 #### 1. Handling Poorly Named Files
 
-The original classifier had limitations with poorly named files. Our solution addresses this by:
+The original classifier had limitations with poorly named files. My solution addresses this by:
 
 - **Content-based Classification**: Using OCR and text extraction to analyze the file content rather than relying solely on filenames
 - **BERT Embeddings**: Leveraging pre-trained language models to understand document semantics regardless of filename
@@ -234,7 +234,7 @@ The original classifier had limitations with poorly named files. Our solution ad
 
 #### 2. Scaling to New Industries
 
-Our implementation enables scaling to new industries through:
+My implementation enables scaling to new industries through:
 
 - **Diverse Training Data**: Synthetic data generator creates documents from multiple industries (financial, medical, insurance, etc.)
 - **Flexible Classification Model**: The model architecture can learn new document types as they are added to the training set
@@ -245,7 +245,7 @@ Our implementation enables scaling to new industries through:
 To handle high document volumes efficiently:
 
 - **Distributed Architecture**: Redis-based task queue with multiple worker processes
-- **Auto-scaling**: Dynamic worker scaling based on queue length and processing metrics
+- **Manual Worker Scaling**: API endpoints to scale worker count based on demand
 - **Asynchronous Processing**: Non-blocking API design with task IDs and status checks
 - **Resource Management**: Container-level resource allocation and optimization
 
@@ -261,75 +261,75 @@ The system is production-ready with:
 
 ### High-Volume Processing
 
-The system is designed to handle high volumes of documents through a combination of architectural features and optimizations:
+The system is designed to handle high document volumes through its distributed architecture and worker model:
 
 #### Scaling Configuration
 
-To achieve maximum throughput:
+To increase throughput:
 
 ```bash
-# Scale to 15-20 worker instances for high throughput
-python -m src.run_service scale 20
+# Scale to desired worker instances based on load
+python -m src.run_service scale 10
 
-# Set environment variables for optimal performance
-export WORKER_REPLICAS=20
+# Set environment variables for worker configuration
+export WORKER_REPLICAS=10
 ```
 
 #### Architecture for High Throughput
 
 - **Distributed Queue**: Redis-based message broker distributes processing across multiple workers
 - **Parallel Processing**: Each worker processes documents independently, maximizing throughput
-- **Dynamic Worker Scaling**: Worker count can be adjusted based on queue length via the API
+- **Manual Worker Scaling**: Worker count can be adjusted via the API to handle varying loads
 - **Efficient Resource Allocation**: Worker containers are configured with resource limits in docker-compose.yml
 
 #### Performance Optimizations
 
 - **Specialized Content Extractors**: Format-specific text extraction for PDF, DOCX, images, and CSV files
 - **OCR Pipeline**: Multi-pass OCR with image preprocessing for difficult documents
-- **Intelligent Classification**: Hybrid approach combining keyword matching with ML model predictions
+- **Hybrid Classification**: Basic keyword matching combined with ML model predictions
 - **Temporary File Management**: Automatic cleanup of processed files to prevent disk space issues
 - **Model Serialization**: Pre-trained models saved to disk to avoid retraining
 
-These optimizations, combined with the distributed architecture, allow the system to efficiently process large volumes of documents. Additional performance gains can be achieved by upgrading hardware resources and further scaling worker instances.
+These optimizations, combined with the distributed architecture, allow the system to efficiently process documents at scale.
 
 ### Processing Capacity
 
 **Can the system handle 100,000 documents per day?**
 
-Based on the current implementation, the system can theoretically process 100,000 documents per day under certain conditions:
+Based on my implementation, the system's document processing capacity depends on several factors:
 
-- **Current Throughput**: In our testing, a single worker can process approximately 1-2 documents per minute, depending on document complexity and format
-- **Limiting Factors**:
-  - OCR processing is particularly time-intensive (5-15 seconds per page for image-based documents)
-  - BERT embedding generation adds 1-2 seconds of processing time per document
-  - The serialized processing within each worker (one document at a time)
+- **Current Implementation**: Individual workers process one document at a time
+- **Processing Times**: 
+  - OCR processing is time-intensive for image-based documents
+  - BERT embedding generation adds processing overhead
+  - Each document type has different processing characteristics
 
-**Realistic Capacity Assessment**:
-- With 20 workers running in parallel on decent hardware (8+ cores, 32GB+ RAM):
-  - Simple text documents: ~25,000-30,000 documents/day
-  - Mixed document types: ~15,000-20,000 documents/day
-  - Image-heavy or complex PDFs: ~8,000-12,000 documents/day
+**Estimated Capacity**:
+- With sufficient hardware resources and worker instances:
+  - Simple text documents likely process faster (several per minute per worker)
+  - Image-heavy documents with OCR requirements process more slowly
 
-To reach the 100,000 documents/day target:
-1. Implement the batch processing feature in the future roadmap
-2. Increase worker count to 50+ across multiple servers
-3. Optimize the content extraction pipeline, particularly OCR processing
-4. Implement caching mechanisms for model components
-5. Use GPU acceleration for the BERT embedding generation
+To significantly increase throughput toward the 100,000 documents/day target, the system would need several enhancements:
+1. Implementation of batch processing
+2. Substantial scaling of worker instances across multiple servers
+3. Optimization of the content extraction pipeline
+4. Addition of caching mechanisms
+5. Potentially adding GPU acceleration for ML components
 
-With these improvements, the system architecture is designed to scale to the 100,000 documents/day target, but the current implementation would require significant hardware resources to achieve this throughput.
+The current architecture supports scaling but would require these enhancements along with appropriate hardware resources to approach the 100,000 documents/day throughput level.
 
 ### Future Roadmap
 
-While the current implementation addresses the core requirements, we plan to further enhance the system with:
+While the current implementation addresses the core requirements, I plan to further enhance the system with:
 
-1. **Feedback-Based Learning**: Feedback loop with incorrect classified files to make the model more accurate
-2. **CI/CD Pipeline and Analytics**: Set up automated testing and deployment workflows using GitHub Actions or similar tools and Dashboard for monitoring classification performance and accuracy metrics
-3. **API Authentication and Protection**: Add OAuth or API key-based authentication for secure access
-4. **Document Segmentation**: Advanced techniques to identify and classify different sections within a single document
-5. **Batch Processing**: Implement true batch processing capabilities for similar document types
-6. **Advanced Caching**: Add Redis-based model and feature caching for faster inference
-7. **Memory-Optimized Processing**: Implement streaming processing for very large documents
-8. **GPU Acceleration**: Add support for GPU-accelerated inference to significantly increase throughput
+1. **Automatic Worker Scaling**: Implement true auto-scaling based on queue metrics without manual intervention
+2. **Feedback-Based Learning**: Feedback loop with incorrect classified files to make the model more accurate
+3. **CI/CD Pipeline and Analytics**: Set up automated testing and deployment workflows using GitHub Actions or similar tools and Dashboard for monitoring classification performance and accuracy metrics
+4. **API Authentication and Protection**: Add OAuth or API key-based authentication for secure access
+5. **Document Segmentation**: Advanced techniques to identify and classify different sections within a single document
+6. **Batch Processing**: Implement true batch processing capabilities for similar document types
+7. **Advanced Caching**: Add Redis-based model and feature caching for faster inference
+8. **Memory-Optimized Processing**: Implement streaming processing for very large documents
+9. **GPU Acceleration**: Add support for GPU-accelerated inference to significantly increase throughput
 
 These enhancements will further improve the system's capabilities while maintaining its core strengths in handling poorly named files, scaling to new industries, and processing large volumes of documents.
