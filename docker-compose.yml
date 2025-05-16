@@ -47,6 +47,25 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+  
+  test:
+    build:
+      context: .
+      dockerfile: tests/docker/Dockerfile.tests
+    volumes:
+      - ./files:/app/files
+      - ./tests:/app/tests
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_URL=http://api-service:5000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - api-service
+      - worker
+      - redis
+    profiles:
+      - test
 
 volumes:
   redis-data:

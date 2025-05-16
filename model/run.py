@@ -4,11 +4,11 @@ Entry point for model operations. This script delegates to the appropriate Docke
 operations based on the command.
 
 Usage:
-    python -m model.run build            # Build the Docker image
-    python -m model.run generate-data    # Generate synthetic data in Docker
-    python -m model.run train            # Train the model in Docker
-    python -m model.run test <file_path> # Test the model in Docker on a file
-    python -m model.run all              # Run all operations in Docker
+    python -m model.run build            
+    python -m model.run generate-data    
+    python -m model.run train            
+    python -m model.run test <file_path> 
+    python -m model.run all              
 """
 
 import sys
