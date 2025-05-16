@@ -15,22 +15,17 @@ class ClassifierService:
         success = self.classifier.load_model()
         if not success:
             logger.warning("Could not load the classifier model. Classification may not work properly.")
-        else:
-            logger.info("Classification model loaded successfully")
             
     def classify_file(self, file_path):
-        logger.info(f"Classifying file: {file_path}")
-        
         if not os.path.exists(file_path):
             logger.error(f"File not found: {file_path}")
             raise FileNotFoundError(f"File {file_path} does not exist")
             
         try:
             result = self.classifier.predict(file_path=file_path)
-            logger.info(f"Classification result for {file_path}: {result}")
             return result
         except Exception as e:
-            logger.error(f"Error classifying file {file_path}: {str(e)}")
+            logger.error(f"Error classifying {file_path}: {str(e)}")
             raise
         
     def classify_file_object(self, file_obj):
@@ -51,8 +46,7 @@ class ClassifierService:
                 extension=extension
             )
             
-            logger.info(f"Classification result for {filename}: {result}")
             return result
         except Exception as e:
-            logger.error(f"Error classifying file object {filename}: {str(e)}")
+            logger.error(f"Error classifying {filename}: {str(e)}")
             raise 

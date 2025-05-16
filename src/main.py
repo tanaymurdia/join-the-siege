@@ -9,7 +9,7 @@ import uuid
 import redis.exceptions
 from src.services.message_broker import MessageBroker
 from src.services.worker_scaling import WorkerScalingService
-from src.models.response_models import ClassificationTaskResponse, ClassificationStatusResponse, WorkerScalingStatusResponse
+from src.schemas.response_schemas import ClassificationTaskResponse, ClassificationStatusResponse, WorkerScalingStatusResponse
 import time
 
 logging.basicConfig(
@@ -48,12 +48,10 @@ scaling_service = WorkerScalingService(redis_client=message_broker.redis_client)
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Starting worker scaling service")
     scaling_service.start_monitoring()
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("Shutting down worker scaling service")
     scaling_service.stop_monitoring()
 
 @app.exception_handler(RequestValidationError)
@@ -74,10 +72,6 @@ async def redis_connection_exception_handler(request: Request, exc: redis.except
 
 @app.post("/classify_file", response_model=ClassificationTaskResponse, status_code=status.HTTP_202_ACCEPTED)
 async def start_classification(file: UploadFile = File(...)):
-    """
-    Start an asynchronous file classification task.
-    Returns a task ID that can be used to retrieve results later.
-    """
     temp_file_path = None
     try:
         file_ext = os.path.splitext(file.filename)[1].lower()
@@ -107,8 +101,6 @@ async def start_classification(file: UploadFile = File(...)):
         with open(temp_file_path, 'wb') as f:
             f.write(content)
         
-        logger.info(f"Saved temporary file to {temp_file_path}")
-        
         try:
             task_id, _ = message_broker.send_classification_task(
                 file_path=temp_file_path,
@@ -129,7 +121,7 @@ async def start_classification(file: UploadFile = File(...)):
                 detail=f"Error scheduling classification task: {str(e)}"
             )
         
-        logger.info(f"Started classification task: {task_id}")
+        logger.info(f"Started task: {task_id}")
         
         return ClassificationTaskResponse(
             task_id=task_id,
@@ -146,9 +138,6 @@ async def start_classification(file: UploadFile = File(...)):
 
 @app.get("/classification/{task_id}", response_model=ClassificationStatusResponse)
 async def get_classification_status(task_id: str = Path(..., description="The task ID returned when starting classification")):
-    """
-    Get the status or result of a classification task.
-    """
     if not task_id or not isinstance(task_id, str) or len(task_id) < 10:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -181,9 +170,6 @@ async def get_classification_status(task_id: str = Path(..., description="The ta
 
 @app.get("/scaling/status", response_model=WorkerScalingStatusResponse)
 async def get_scaling_status():
-    """
-    Get the current status of worker scaling.
-    """
     try:
         metrics = scaling_service.redis_client.hgetall(scaling_service.metric_key)
         
@@ -205,7 +191,6 @@ async def get_scaling_status():
                 
         return WorkerScalingStatusResponse(**metrics)
     except redis.exceptions.ConnectionError:
-        logger.warning("Redis connection error in get_scaling_status")
         return WorkerScalingStatusResponse(
             current_worker_count=scaling_service.current_worker_count,
             min_workers=scaling_service.worker_min_count,
@@ -229,9 +214,6 @@ async def get_scaling_status():
 
 @app.post("/scaling/workers/{count}")
 async def set_worker_count(count: int = Path(..., description="Target number of workers", ge=1, le=20)):
-    """
-    Manually set the number of worker instances.
-    """
     try:
         scaling_service.scale_workers(count)
         return {"status": "success", "message": f"Worker count set to {count}"}
@@ -244,9 +226,6 @@ async def set_worker_count(count: int = Path(..., description="Target number of 
 
 @app.get("/health")
 async def health_check():
-    """
-    Health check endpoint
-    """
     try:
         message_broker.redis_client.ping()
         worker_count = scaling_service.get_worker_stats()

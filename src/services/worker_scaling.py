@@ -29,17 +29,13 @@ class WorkerScalingService:
         self.scaling_interval = 30
         self.running = True
         self.last_scaling_time = time.time() - 120
-        
-        logger.info(f"Initialized worker scaling service with min={self.worker_min_count}, max={self.worker_max_count}, current={self.current_worker_count}")
     
     def start_monitoring(self):
         self.monitoring_thread = threading.Thread(target=self.monitor_loop, daemon=True)
         self.monitoring_thread.start()
-        logger.info("Started worker scaling monitoring thread")
         
     def stop_monitoring(self):
         self.running = False
-        logger.info("Stopping worker scaling monitoring")
         
     def get_queue_length(self):
         try:
@@ -65,7 +61,7 @@ class WorkerScalingService:
         if target_count == self.current_worker_count:
             return
             
-        logger.info(f"Scaling workers from {self.current_worker_count} to {target_count}")
+        logger.info(f"Scaling workers: {self.current_worker_count} → {target_count}")
         
         try:
             subprocess.run(
@@ -84,11 +80,9 @@ class WorkerScalingService:
             self.current_worker_count = target_count
             
         except Exception as e:
-            logger.error(f"Error during worker scaling: {str(e)}")
+            logger.error(f"Error during scaling: {str(e)}")
     
     def monitor_loop(self):
-        logger.info("Starting worker scaling monitoring loop")
-                
         while self.running:
             try:
                 if time.time() - self.last_scaling_time < 60:
@@ -113,6 +107,6 @@ class WorkerScalingService:
                     self.scale_workers(worker_count - 1)
                     
             except Exception as e:
-                logger.error(f"Error in scaling monitor loop: {str(e)}")
+                logger.error(f"Error in scaling loop: {str(e)}")
                 
             time.sleep(self.scaling_interval) 
