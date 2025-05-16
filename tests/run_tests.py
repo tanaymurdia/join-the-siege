@@ -86,6 +86,21 @@ def run_load_test(concurrent=5, duration=30, files_dir="files"):
     print(f"Running load test with {concurrent} concurrent users for {duration} seconds...")
     return subprocess.call(cmd)
 
+def run_scaling_test(files_dir="files", num_files=50, batch_size=5, delay=2.0):
+    print(f"Preparing for worker scaling test with {num_files} files in batches of {batch_size}...")
+    
+    cmd = [
+        "docker-compose", "--profile", "test", "run", "--rm", "test", 
+        "python", "tests/load/test_worker_scaling.py",
+        "--files-dir", files_dir,
+        "--num-files", str(num_files),
+        "--batch-size", str(batch_size),
+        "--delay", str(delay)
+    ]
+    
+    print(f"Running worker scaling test...")
+    return subprocess.call(cmd)
+
 def main():
     parser = argparse.ArgumentParser(description="Test runner for file classification service")
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
@@ -109,6 +124,12 @@ def main():
     
     services_parser = subparsers.add_parser("services", help="Manage Docker services")
     services_parser.add_argument("action", choices=["start", "stop"], help="Action to perform on services")
+    
+    scaling_parser = subparsers.add_parser("scaling", help="Run worker scaling tests")
+    scaling_parser.add_argument("--files-dir", type=str, default="files", help="Directory containing test files")
+    scaling_parser.add_argument("--num-files", type=int, default=50, help="Number of files to process")
+    scaling_parser.add_argument("--batch-size", type=int, default=5, help="Number of files per batch")
+    scaling_parser.add_argument("--delay", type=float, default=2.0, help="Seconds to wait between batches")
     
     args = parser.parse_args()
     
@@ -148,6 +169,11 @@ def main():
             return start_services()
         elif args.action == "stop":
             return stop_services()
+    
+    elif args.command == "scaling":
+        if start_services() != 0:
+            return 1
+        return run_scaling_test(args.files_dir, args.num_files, args.batch_size, args.delay)
     
     else:
         parser.print_help()

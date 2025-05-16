@@ -46,7 +46,6 @@ RUN pip install --no-cache-dir pybind11>=2.2 && \
     pip install --no-cache-dir fasttext==0.9.2 --no-binary :all: || \
     echo "FastText installation failed, continuing without it"
 
-# Download and cache the DistilBERT model during build
 RUN echo "Downloading and caching DistilBERT model..." && \
     mkdir -p /root/.cache/huggingface/hub && \
     python -c "from transformers import AutoTokenizer, AutoModel; \

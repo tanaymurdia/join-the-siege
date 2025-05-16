@@ -8,7 +8,9 @@ import logging
 import uuid
 import redis.exceptions
 from src.services.message_broker import MessageBroker
-from src.models.response_models import ClassificationTaskResponse, ClassificationStatusResponse
+from src.services.worker_scaling import WorkerScalingService
+from src.models.response_models import ClassificationTaskResponse, ClassificationStatusResponse, WorkerScalingStatusResponse
+import time
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,6 +22,7 @@ logging.basicConfig(
 
 logger = logging.getLogger('api')
 logging.getLogger('message_broker').setLevel(logging.INFO)
+logging.getLogger('worker_scaling').setLevel(logging.INFO)
 logging.getLogger('uvicorn').setLevel(logging.INFO)
 logging.getLogger('fastapi').setLevel(logging.INFO)
 
@@ -41,6 +44,17 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 ALLOWED_FILE_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.jpg', '.jpeg', '.png', '.txt']
 
 message_broker = MessageBroker()
+scaling_service = WorkerScalingService(redis_client=message_broker.redis_client)
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting worker scaling service")
+    scaling_service.start_monitoring()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down worker scaling service")
+    scaling_service.stop_monitoring()
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -126,9 +140,7 @@ async def start_classification(file: UploadFile = File(...)):
         raise
     except Exception as e:
         if temp_file_path and os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-            logger.info(f"Removed temporary file {temp_file_path} after error")
-            
+            os.remove(temp_file_path)            
         logger.error(f"Error starting classification: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -167,6 +179,58 @@ async def get_classification_status(task_id: str = Path(..., description="The ta
             detail=f"Error retrieving task status: {str(e)}"
         )
 
+@app.get("/scaling/status", response_model=WorkerScalingStatusResponse)
+async def get_scaling_status():
+    """
+    Get the current status of worker scaling.
+    """
+    try:
+        metrics = scaling_service.redis_client.hgetall(scaling_service.metric_key)
+        
+        if not metrics:
+            metrics = {
+                "current_worker_count": scaling_service.current_worker_count,
+                "min_workers": scaling_service.worker_min_count,
+                "max_workers": scaling_service.worker_max_count,
+                "worker_count": scaling_service.get_worker_stats(),
+                "queue_length": scaling_service.get_queue_length(),
+                "timestamp": time.time(),
+                "last_scaling_time": 0
+            }
+            
+        for k in metrics:
+            if k in ["timestamp", "last_scaling_time", "current_worker_count", 
+                     "worker_count", "queue_length", "min_workers", "max_workers"]:
+                metrics[k] = float(metrics[k])
+                
+        return WorkerScalingStatusResponse(**metrics)
+    except redis.exceptions.ConnectionError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Scaling service temporarily unavailable due to Redis connection issues."
+        )
+    except Exception as e:
+        logger.error(f"Error getting scaling status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving scaling status: {str(e)}"
+        )
+
+@app.post("/scaling/workers/{count}")
+async def set_worker_count(count: int = Path(..., description="Target number of workers", ge=1, le=20)):
+    """
+    Manually set the number of worker instances.
+    """
+    try:
+        scaling_service.scale_workers(count)
+        return {"status": "success", "message": f"Worker count set to {count}"}
+    except Exception as e:
+        logger.error(f"Error setting worker count: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error setting worker count: {str(e)}"
+        )
+
 @app.get("/health")
 async def health_check():
     """
@@ -174,11 +238,22 @@ async def health_check():
     """
     try:
         message_broker.redis_client.ping()
-        return {"status": "healthy", "components": {"api": "up", "redis": "up"}}
+        worker_count = scaling_service.get_worker_stats()
+        return {
+            "status": "healthy" if worker_count > 0 else "degraded", 
+            "components": {
+                "api": "up", 
+                "redis": "up",
+                "workers": {
+                    "status": "up" if worker_count > 0 else "down",
+                    "count": worker_count
+                }
+            }
+        }
     except redis.exceptions.ConnectionError:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "unhealthy", "components": {"api": "up", "redis": "down"}}
+            content={"status": "unhealthy", "components": {"api": "up", "redis": "down", "workers": {"status": "unknown", "count": 0}}}
         )
     except Exception as e:
         logger.error(f"Health check error: {str(e)}")

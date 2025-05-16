@@ -10,6 +10,7 @@ services:
       - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - WORKER_REPLICAS=${WORKER_REPLICAS:-3}
     ports:
       - "5000:5000"
     depends_on:
@@ -20,6 +21,14 @@ services:
           cpus: '1'
         reservations:
           cpus: '0.5'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
   
   worker:
     build:
@@ -32,14 +41,28 @@ services:
       - PYTHONUNBUFFERED=1
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - WORKER_ID={{.Task.Slot}}
     depends_on:
       - redis
     deploy:
+      mode: replicated
+      replicas: ${WORKER_REPLICAS:-3}
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
       resources:
         limits:
           cpus: '2'
         reservations:
-          cpus: '1'
+          cpus: '0.5'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/app/worker_healthcheck.txt') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network
   
   redis:
     image: redis:7-alpine
@@ -47,6 +70,14 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - app-network
   
   test:
     build:
@@ -66,6 +97,12 @@ services:
       - redis
     profiles:
       - test
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   redis-data:

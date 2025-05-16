@@ -8,12 +8,10 @@ logger = logging.getLogger('classifier_service')
 
 class ClassifierService:
     def __init__(self, model_dir='model/saved_models'):
-        logger.info(f"Initializing classifier service with model directory: {model_dir}")
         self.classifier = AdvancedFileClassifier(model_dir=model_dir)
         self.load_model()
         
     def load_model(self):
-        logger.info("Loading classification model")
         success = self.classifier.load_model()
         if not success:
             logger.warning("Could not load the classifier model. Classification may not work properly.")
@@ -45,9 +43,7 @@ class ClassifierService:
         
         if filename:
             _, extension = os.path.splitext(filename)
-            
-        logger.info(f"Classifying file object with filename: {filename}")
-        
+                    
         try:
             result = self.classifier.predict(
                 file_obj=file_obj, 
