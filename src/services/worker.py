@@ -39,6 +39,7 @@ class ClassificationWorker:
         try:
             file_path = task['file_path']
             result_queue = task['result_queue']
+            task_id = task['task_id']
             
             logger.info(f"Checking file path: {file_path}")
             
@@ -59,10 +60,13 @@ class ClassificationWorker:
             self.message_broker.send_classification_result(
                 result_queue=result_queue,
                 file_type=file_type,
-                success=True
+                success=True,
+                task_id=task_id
             )
             
-            logger.info(f"Task {task['task_id']} completed successfully")
+            logger.info(f"Task {task_id} completed successfully")
+            
+            self.cleanup_temp_file(file_path)
             
         except Exception as e:
             logger.error(f"Error processing task {task['task_id']}: {str(e)}")
@@ -71,8 +75,17 @@ class ClassificationWorker:
                 result_queue=task['result_queue'],
                 file_type="unknown",
                 success=False,
-                error=str(e)
+                error=str(e),
+                task_id=task['task_id']
             )
+            
+    def cleanup_temp_file(self, file_path):
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"Removed temporary file {file_path}")
+        except Exception as e:
+            logger.error(f"Error removing temporary file {file_path}: {str(e)}")
     
     def run(self):
         logger.info("Classification worker starting up...")
