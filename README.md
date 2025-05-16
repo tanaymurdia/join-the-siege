@@ -1,23 +1,57 @@
-# Join The Siege Classification System
+# Heron Classification System
 
 A robust, scalable document classification system that can handle poorly named files, scale to new industries, and process large volumes of documents.
 
-## Prerequisites
+## Table of Contents
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [Usage Guide](#usage-guide)
+  - [Data Generation](#data-generation)
+  - [Model Training](#model-training)
+  - [Running the Service](#running-the-service)
+  - [API Endpoints](#api-endpoints)
+  - [Testing](#testing)
+- [Complete Workflow](#complete-workflow)
+- [Technical Details](#technical-details)
+  - [How We Address Key Challenges](#how-we-address-key-challenges)
+  - [High-Volume Processing](#high-volume-processing)
+  - [Processing Capacity](#processing-capacity)
+  - [Future Roadmap](#future-roadmap)
+
+## Overview
+
+The Heron Classification System is designed to automatically classify documents based on their content, regardless of filename quality. It processes documents at scale using a distributed architecture with auto-scaling workers, making it suitable for high-volume environments.
+
+## Key Features
+
+- **Content-based classification** using OCR and BERT embeddings
+- **Multiple file format support** (PDF, DOCX, images, CSV)
+- **Distributed processing architecture** with Redis queue
+- **Auto-scaling worker system** for handling varying loads
+- **Comprehensive testing suite** including unit, integration, and load tests
+- **Docker-based deployment** for consistent environments
+
+## Getting Started
+
+### Prerequisites
 
 - Docker and Docker Compose
 - Python 3.8+ (for local development only)
 
-### Installing Docker
+#### Installing Docker
 
-#### Windows
+**Windows**
 1. Download and install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop)
 2. Start Docker Desktop after installation
 
-#### macOS
+**macOS**
 1. Download and install [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop)
 2. Start Docker Desktop after installation
 
-#### Linux
+**Linux**
 ```bash
 # Update package index
 sudo apt-get update
@@ -40,7 +74,7 @@ sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-
 sudo chmod +x /usr/local/bin/docker-compose
 ```
 
-## Installation
+### Installation
 
 1. Clone the repository:
    ```bash
@@ -54,7 +88,9 @@ sudo chmod +x /usr/local/bin/docker-compose
    python -m tests.run_tests build
    ```
 
-## Data Generation
+## Usage Guide
+
+### Data Generation
 
 Generate synthetic data for training the classification model:
 
@@ -65,7 +101,7 @@ python -m model.run_model generate-data --num-samples 1000
 
 This will create synthetic documents of various types (drivers licenses, bank statements, invoices, etc.) in the `files/synthetic` directory.
 
-## Model Training
+### Model Training
 
 Train the classifier using the generated synthetic data:
 
@@ -79,7 +115,7 @@ python -m model.run_model all --num-samples 1000
 
 The trained model will be saved in the `model/saved_models` directory.
 
-## Running the Service
+### Running the Service
 
 Start the classification service:
 
@@ -102,39 +138,39 @@ python -m src.run_service stop
 
 By default, the API service will be accessible at `http://localhost:5000`.
 
-## API Endpoints
+### API Endpoints
 
-### Classify a File
+#### Classify a File
 ```
 POST /classify_file
 ```
 Upload a file for classification. Returns a task ID for checking the status.
 
-### Check Classification Status
+#### Check Classification Status
 ```
 GET /classification/{task_id}
 ```
 Check the status and results of a classification task.
 
-### Check Worker Scaling Status
+#### Check Worker Scaling Status
 ```
 GET /scaling/status
 ```
 View the current worker scaling metrics.
 
-### Adjust Worker Count
+#### Adjust Worker Count
 ```
 POST /scaling/workers/{count}
 ```
 Adjust the number of worker instances.
 
-### Health Check
+#### Health Check
 ```
 GET /health
 ```
 Check the health of all services.
 
-## Testing
+### Testing
 
 The project includes comprehensive testing tools:
 
@@ -155,8 +191,9 @@ python -m tests.run_tests unit --services-only
 python -m tests.run_tests unit --integration-only
 ```
 
+## Complete Workflow
 
-## Full Workflow Example
+Here's a complete example of the workflow from setup to testing:
 
 ```bash
 # 1. Build Docker images
@@ -181,3 +218,118 @@ python -m tests.run_tests unit
 # 7. Stop services when done
 python -m src.run_service stop
 ```
+
+## Technical Details
+
+### How We Address Key Challenges
+
+#### 1. Handling Poorly Named Files
+
+The original classifier had limitations with poorly named files. Our solution addresses this by:
+
+- **Content-based Classification**: Using OCR and text extraction to analyze the file content rather than relying solely on filenames
+- **BERT Embeddings**: Leveraging pre-trained language models to understand document semantics regardless of filename
+- **Multi-format Support**: Handling various document formats (PDF, DOCX, images) with specialized extraction techniques
+- **Synthetic Data**: Training with a mixture of properly and poorly named files to ensure robust classification
+
+#### 2. Scaling to New Industries
+
+Our implementation enables scaling to new industries through:
+
+- **Diverse Training Data**: Synthetic data generator creates documents from multiple industries (financial, medical, insurance, etc.)
+- **Flexible Classification Model**: The model architecture can learn new document types as they are added to the training set
+- **Extensible Document Types**: Easy to add new document type definitions in the data generator
+
+#### 3. Processing Larger Volumes
+
+To handle high document volumes efficiently:
+
+- **Distributed Architecture**: Redis-based task queue with multiple worker processes
+- **Auto-scaling**: Dynamic worker scaling based on queue length and processing metrics
+- **Asynchronous Processing**: Non-blocking API design with task IDs and status checks
+- **Resource Management**: Container-level resource allocation and optimization
+
+#### 4. Production Readiness
+
+The system is production-ready with:
+
+- **Containerization**: Docker-based deployment for consistent environments
+- **Health Monitoring**: Comprehensive health checks and logging
+- **Error Handling**: Robust error handling and recovery mechanisms
+- **Scalability**: Horizontal scaling through Docker Compose
+- **Testing**: Extensive test suite including unit, integration, and load tests
+
+### High-Volume Processing
+
+The system is designed to handle high volumes of documents through a combination of architectural features and optimizations:
+
+#### Scaling Configuration
+
+To achieve maximum throughput:
+
+```bash
+# Scale to 15-20 worker instances for high throughput
+python -m src.run_service scale 20
+
+# Set environment variables for optimal performance
+export WORKER_REPLICAS=20
+```
+
+#### Architecture for High Throughput
+
+- **Distributed Queue**: Redis-based message broker distributes processing across multiple workers
+- **Parallel Processing**: Each worker processes documents independently, maximizing throughput
+- **Dynamic Worker Scaling**: Worker count can be adjusted based on queue length via the API
+- **Efficient Resource Allocation**: Worker containers are configured with resource limits in docker-compose.yml
+
+#### Performance Optimizations
+
+- **Specialized Content Extractors**: Format-specific text extraction for PDF, DOCX, images, and CSV files
+- **OCR Pipeline**: Multi-pass OCR with image preprocessing for difficult documents
+- **Intelligent Classification**: Hybrid approach combining keyword matching with ML model predictions
+- **Temporary File Management**: Automatic cleanup of processed files to prevent disk space issues
+- **Model Serialization**: Pre-trained models saved to disk to avoid retraining
+
+These optimizations, combined with the distributed architecture, allow the system to efficiently process large volumes of documents. Additional performance gains can be achieved by upgrading hardware resources and further scaling worker instances.
+
+### Processing Capacity
+
+**Can the system handle 100,000 documents per day?**
+
+Based on the current implementation, the system can theoretically process 100,000 documents per day under certain conditions:
+
+- **Current Throughput**: In our testing, a single worker can process approximately 1-2 documents per minute, depending on document complexity and format
+- **Limiting Factors**:
+  - OCR processing is particularly time-intensive (5-15 seconds per page for image-based documents)
+  - BERT embedding generation adds 1-2 seconds of processing time per document
+  - The serialized processing within each worker (one document at a time)
+
+**Realistic Capacity Assessment**:
+- With 20 workers running in parallel on decent hardware (8+ cores, 32GB+ RAM):
+  - Simple text documents: ~25,000-30,000 documents/day
+  - Mixed document types: ~15,000-20,000 documents/day
+  - Image-heavy or complex PDFs: ~8,000-12,000 documents/day
+
+To reach the 100,000 documents/day target:
+1. Implement the batch processing feature in the future roadmap
+2. Increase worker count to 50+ across multiple servers
+3. Optimize the content extraction pipeline, particularly OCR processing
+4. Implement caching mechanisms for model components
+5. Use GPU acceleration for the BERT embedding generation
+
+With these improvements, the system architecture is designed to scale to the 100,000 documents/day target, but the current implementation would require significant hardware resources to achieve this throughput.
+
+### Future Roadmap
+
+While the current implementation addresses the core requirements, we plan to further enhance the system with:
+
+1. **Feedback-Based Learning**: Feedback loop with incorrect classified files to make the model more accurate
+2. **CI/CD Pipeline and Analytics**: Set up automated testing and deployment workflows using GitHub Actions or similar tools and Dashboard for monitoring classification performance and accuracy metrics
+3. **API Authentication and Protection**: Add OAuth or API key-based authentication for secure access
+4. **Document Segmentation**: Advanced techniques to identify and classify different sections within a single document
+5. **Batch Processing**: Implement true batch processing capabilities for similar document types
+6. **Advanced Caching**: Add Redis-based model and feature caching for faster inference
+7. **Memory-Optimized Processing**: Implement streaming processing for very large documents
+8. **GPU Acceleration**: Add support for GPU-accelerated inference to significantly increase throughput
+
+These enhancements will further improve the system's capabilities while maintaining its core strengths in handling poorly named files, scaling to new industries, and processing large volumes of documents.
