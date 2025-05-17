@@ -4,6 +4,7 @@ A robust, scalable document classification system that can handle poorly named f
 
 ## Table of Contents
 - [Overview](#overview)
+- [System Design](#system-design)
 - [Key Features](#key-features)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
