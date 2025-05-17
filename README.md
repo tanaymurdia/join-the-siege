@@ -25,6 +25,11 @@ A robust, scalable document classification system that can handle poorly named f
 
 The Heron Classification System is designed to automatically classify documents based on their content, regardless of filename quality. It processes documents at scale using a distributed architecture with configurable workers, making it suitable for high-volume environments.
 
+## System Design
+
+![image](https://github.com/user-attachments/assets/74fc7c5d-9afb-4c8c-8211-7411b3d5a31c)
+
+
 ## Key Features
 
 - **Content-based classification** using OCR and BERT embeddings
